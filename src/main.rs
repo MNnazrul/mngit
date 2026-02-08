@@ -1,15 +1,44 @@
-use sha2::{Digest, Sha256};
+use std::{fs, io, path::Path};
 
-fn get_hash_in_hex(value: &str) -> String {
-    let mut hasher = Sha256::new();
-    let data = value.as_bytes();
-    hasher.update(data);
-    let hash = hasher.finalize();
-    hash.iter().map(|b| format!("{:02x}", b)).collect()
+use clap::Parser;
+
+#[derive(Parser, Debug)]
+struct Args {
+    action: String,
+}
+
+fn init_repo() -> io::Result<()> {
+    let init_paths = [
+        ".mngit",
+        ".mngit/objects/",
+        ".mngit/refs/heads/",
+        ".mngit/HEAD",
+    ];
+
+    for p in init_paths {
+        let path = Path::new(p);
+
+        if p.ends_with("HEAD") {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+
+            if !path.exists() {
+                fs::write(path, b"ref: refs/heads/main\n")?;
+            }
+        } else {
+            fs::create_dir_all(path)?;
+        }
+    }
+
+    Ok(())
 }
 
 fn main() {
-    let answer = get_hash_in_hex("hello");
-    println!("{}", answer);
-    println!("{}", answer.len());
+    let args = Args::parse();
+
+    if args.action == "init" && let Err(e) = init_repo(){
+        eprintln!("init failed: {e}");
+        std::process::exit(1);
+    }
 }
