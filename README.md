@@ -1,6 +1,6 @@
 ## 🧱 Phase 0: Repository Setup
 
-* [ ] **`init`**
+* [X] **`init`**
   Create `.git/`, `.git/objects/`, `.git/refs/heads/`, `.git/HEAD`
 
 ---
