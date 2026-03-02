@@ -10,7 +10,7 @@
 * [X] **`hash-object -w <file>`**
   File → blob object → SHA-1 → store in `.git/objects/`
 
-* [ ] **`cat-file -p <oid>`**
+* [X] **`cat-file -p <oid>`**
   Read object → decompress → print content
 
 ---

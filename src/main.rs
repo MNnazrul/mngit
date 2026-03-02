@@ -4,7 +4,7 @@ use std::{
 };
 
 use clap::Parser;
-use flate2::{Compression, write::ZlibEncoder};
+use flate2::{Compression, read::ZlibDecoder, write::ZlibEncoder};
 use sha1::{Digest, Sha1};
 
 #[derive(Parser, Debug)]
@@ -15,8 +15,15 @@ struct Args {
     #[arg(short = 'w', long = "write", default_value_t = false)]
     write: bool,
 
-    /// For `hash-object` : file path
+    /// For `cat-file`: pass `-p` to pretty-print object.
+    #[arg(short = 'p', long = "print", default_value_t = false)]
+    print: bool,
+
+    /// For `hash-object`: file path. For `cat-file`: object id.
     file: Option<PathBuf>,
+
+    /// For `cat-file`: object id (alternative position)
+    oid: Option<String>,
 }
 
 fn init_repo() -> io::Result<()> {
@@ -87,6 +94,49 @@ fn write_object(oid: &str, raw: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
+fn read_object(oid: &str) -> io::Result<Vec<u8>> {
+    // Read object from .mngit/objects/xx/yyyyyy...
+    let dir_name = &oid[..2];
+    let file_name = &oid[2..];
+    let obj_path = Path::new(".mngit")
+        .join("objects")
+        .join(dir_name)
+        .join(file_name);
+
+    if !obj_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Object not found: {}", oid),
+        ));
+    }
+
+    // Read and decompress
+    let compressed = fs::read(obj_path)?;
+    let mut decoder = ZlibDecoder::new(&compressed[..]);
+    let mut raw = Vec::new();
+    io::Read::read_to_end(&mut decoder, &mut raw)?;
+
+    Ok(raw)
+}
+
+fn cat_file(oid: &str) -> io::Result<()> {
+    let raw = read_object(oid)?;
+
+    // Find the null byte that separates header from content
+    let null_pos = raw
+        .iter()
+        .position(|&b| b == 0)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid object format"))?;
+
+    // Extract content after the null byte
+    let content = &raw[null_pos + 1..];
+
+    // Print content (write to stdout)
+    io::Write::write_all(&mut io::stdout(), content)?;
+
+    Ok(())
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -122,9 +172,38 @@ fn main() {
             }
         }
 
+        "cat-file" => {
+            let repo_dir = Path::new(".mngit");
+            if !repo_dir.exists() || !repo_dir.is_dir() {
+                eprintln!("Please first init the repository");
+                std::process::exit(1);
+            }
+
+            if !args.print {
+                eprintln!("Usage: cat-file -p <oid>");
+                std::process::exit(1);
+            }
+
+            let oid = match args.oid.as_deref() {
+                Some(o) => o,
+                None => match args.file.as_deref() {
+                    Some(p) => p.to_str().unwrap_or(""),
+                    None => {
+                        eprintln!("Usage: cat-file -p <oid>");
+                        std::process::exit(1);
+                    }
+                },
+            };
+
+            if let Err(e) = cat_file(oid) {
+                eprintln!("cat-file failed: {e}");
+                std::process::exit(1);
+            }
+        }
+
         other => {
             eprintln!("No a correct command : {other}");
-            eprintln!("Try: init | hash-object [-w] <file>");
+            eprintln!("Try: init | hash-object [-w] <file> | cat-file -p <oid>");
             std::process::exit(1);
         }
     }
