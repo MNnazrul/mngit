@@ -7,7 +7,7 @@
 
 ## 🧬 Phase 1: Object Database (Git Core)
 
-* [ ] **`hash-object -w <file>`**
+* [X] **`hash-object -w <file>`**
   File → blob object → SHA-1 → store in `.git/objects/`
 
 * [ ] **`cat-file -p <oid>`**
