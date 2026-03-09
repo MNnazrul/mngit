@@ -17,7 +17,7 @@
 
 ## 🌳 Phase 2: Tree (Directory Snapshot)
 
-* [ ] **`write-tree`**
+* [X] **`write-tree`**
   Working directory → tree object
 
 * [ ] **`ls-tree <tree_oid>`**

@@ -7,6 +7,13 @@ use clap::Parser;
 use flate2::{Compression, read::ZlibDecoder, write::ZlibEncoder};
 use sha1::{Digest, Sha1};
 
+#[derive(Debug, Clone)]
+struct TreeEntry {
+    mode: String,
+    name: String,
+    oid: Vec<u8>, // 20 raw bytes
+}
+
 #[derive(Parser, Debug)]
 struct Args {
     action: String,
@@ -137,6 +144,123 @@ fn cat_file(oid: &str) -> io::Result<()> {
     Ok(())
 }
 
+fn build_tree_raw(entries: &[TreeEntry]) -> Vec<u8> {
+    // Build tree content (without header)
+    let mut content = Vec::new();
+
+    for entry in entries {
+        // Format: "<mode> <name>\0<20-byte-oid>"
+        content.extend_from_slice(entry.mode.as_bytes());
+        content.push(b' ');
+        content.extend_from_slice(entry.name.as_bytes());
+        content.push(0);
+        content.extend_from_slice(&entry.oid);
+    }
+
+    // Add header
+    let mut raw = Vec::with_capacity(32 + content.len());
+    raw.extend_from_slice(format!("tree {}\0", content.len()).as_bytes());
+    raw.extend_from_slice(&content);
+    raw
+}
+
+fn write_tree_at_path(path: &Path) -> io::Result<String> {
+    let mut entries = Vec::new();
+
+    // Read directory entries
+    let mut dir_entries: Vec<_> = fs::read_dir(path)?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            let name = e.file_name();
+            let name_str = name.to_string_lossy();
+            // Skip .mngit, target, .git, and other common build/cache directories
+            name_str != ".mngit"
+                && name_str != "target"
+                && name_str != ".git"
+                && name_str != "node_modules"
+                && !name_str.starts_with('.')
+        })
+        .collect();
+
+    // Sort by name (Git requirement)
+    dir_entries.sort_by_key(|e| e.file_name());
+
+    for entry in dir_entries {
+        let entry_path = entry.path();
+        let name = entry
+            .file_name()
+            .to_str()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid file name"))?
+            .to_string();
+
+        let metadata = entry.metadata()?;
+
+        if metadata.is_dir() {
+            // Recursively create tree for subdirectory
+            let sub_tree_oid = write_tree_at_path(&entry_path)?;
+            let oid_bytes = hex_to_bytes(&sub_tree_oid)?;
+
+            entries.push(TreeEntry {
+                mode: "40000".to_string(), // directory mode in Git
+                name,
+                oid: oid_bytes,
+            });
+        } else if metadata.is_file() {
+            // Create blob for file
+            let file_oid = hash_object(&entry_path, true)?;
+            let oid_bytes = hex_to_bytes(&file_oid)?;
+
+            // Determine file mode (simplified: executable or regular)
+            #[cfg(unix)]
+            let mode = {
+                use std::os::unix::fs::PermissionsExt;
+                let perms = metadata.permissions();
+                if perms.mode() & 0o111 != 0 {
+                    "100755" // executable
+                } else {
+                    "100644" // regular file
+                }
+            };
+
+            #[cfg(not(unix))]
+            let mode = "100644";
+
+            entries.push(TreeEntry {
+                mode: mode.to_string(),
+                name,
+                oid: oid_bytes,
+            });
+        }
+    }
+
+    // Build tree object
+    let raw = build_tree_raw(&entries);
+
+    // Calculate OID
+    let oid = Sha1::digest(&raw);
+    let oid_hex: String = oid.iter().map(|b| format!("{:02x}", b)).collect();
+
+    // Write tree object
+    write_object(&oid_hex, &raw)?;
+
+    Ok(oid_hex)
+}
+
+fn write_tree() -> io::Result<String> {
+    write_tree_at_path(Path::new("."))
+}
+
+fn hex_to_bytes(hex: &str) -> io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    for i in (0..hex.len()).step_by(2) {
+        let byte = u8::from_str_radix(&hex[i..i + 2], 16).map_err(|e| {
+            io::Error::new(io::ErrorKind::InvalidData, format!("Invalid hex: {}", e))
+        })?;
+        bytes.push(byte);
+    }
+    Ok(bytes)
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -201,9 +325,25 @@ fn main() {
             }
         }
 
+        "write-tree" => {
+            let repo_dir = Path::new(".mngit");
+            if !repo_dir.exists() || !repo_dir.is_dir() {
+                eprintln!("Please first init the repository");
+                std::process::exit(1);
+            }
+
+            match write_tree() {
+                Ok(tree_oid) => println!("{tree_oid}"),
+                Err(e) => {
+                    eprintln!("write-tree failed: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+
         other => {
             eprintln!("No a correct command : {other}");
-            eprintln!("Try: init | hash-object [-w] <file> | cat-file -p <oid>");
+            eprintln!("Try: init | hash-object [-w] <file> | cat-file -p <oid> | write-tree");
             std::process::exit(1);
         }
     }
