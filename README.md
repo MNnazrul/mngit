@@ -1,115 +1,100 @@
-## 🧱 Phase 0: Repository Setup
+# mngit
 
-* [X] **`init`**
-  Create `.git/`, `.git/objects/`, `.git/refs/heads/`, `.git/HEAD`
-
----
-
-## 🧬 Phase 1: Object Database (Git Core)
-
-* [X] **`hash-object -w <file>`**
-  File → blob object → SHA-1 → store in `.git/objects/`
-
-* [X] **`cat-file -p <oid>`**
-  Read object → decompress → print content
+A Git implementation from scratch in Rust — for learning how Git works internally.
 
 ---
 
-## 🌳 Phase 2: Tree (Directory Snapshot)
+## Progress
 
-* [X] **`write-tree`**
-  Working directory → tree object
+### Phase 0: Repository Setup
 
-* [ ] **`ls-tree <tree_oid>`**
-  Read tree object and list files/directories
+- [x] **`init`** — Create `.mngit/`, `.mngit/objects/`, `.mngit/refs/heads/`, `.mngit/HEAD`
 
----
+### Phase 1: Object Database
 
-## 🧾 Phase 3: Commits & References (History)
+- [x] **`hash-object [-w] <file>`** — File → blob object → SHA-1 → store in `.mngit/objects/`
+- [x] **`cat-file -p <oid>`** — Read object → decompress → print content
 
-* [ ] **`commit-tree <tree_oid> -m "message"`**
-  Tree → commit object
+### Phase 2: Tree (Directory Snapshot)
 
-* [ ] **`update-ref` / `update-head`**
-  Update `refs/heads/main` or `HEAD`
+- [x] **`write-tree`** — Working directory → tree object
+- [x] **`ls-tree <tree_oid>`** — Read tree object and list files/directories
 
-* [ ] **`rev-parse <ref>`**
-  Resolve `HEAD` or branch name to an object id
+### Phase 3: Commits & References
 
-* [ ] **`log`**
-  Traverse and display commit history
+- [ ] **`commit-tree <tree_oid> -m "message"`** — Tree → commit object
+- [ ] **`update-ref` / `update-head`** — Update `refs/heads/main` or `HEAD`
+- [ ] **`rev-parse <ref>`** — Resolve `HEAD` or branch name to an OID
+- [ ] **`log`** — Traverse and display commit history
 
----
+### Phase 4: Checkout
 
-## 🔄 Phase 4: Checkout (Restore Files)
+- [ ] **`checkout <commit | branch>`** — Commit → tree → recreate working directory
 
-* [ ] **`checkout <commit | branch>`**
-  Commit → tree → recreate working directory
+### Phase 5: Index / Staging Area
 
----
+- [ ] **`add <path>`** — File → staging area (`.mngit/index`)
+- [ ] **`status`** — Compare working directory vs index vs `HEAD`
+- [ ] **`commit`** — Index → tree → commit
 
-## 📦 Phase 5: Index / Staging Area
+### Phase 6: Branching & Diff
 
-* [ ] **`add <path>`**
-  File → staging area (`.git/index`)
+- [ ] **`branch`** — Create and list branches
+- [ ] **`diff`** — Compare changes (file/tree/commit)
+- [ ] **`merge`** — Merge branches
 
-* [ ] **`status`**
-  Compare working directory vs index vs `HEAD`
+### Phase 7: Advanced
 
-* [ ] **`commit`**
-  Index → tree → commit
-
----
-
-## 🌿 Phase 6: Branching & Diff
-
-* [ ] **`branch`**
-  Create and list branches
-
-* [ ] **`diff`**
-  Compare changes (file/tree/commit)
-
-* [ ] **`merge`**
-  Merge branches
+- [ ] **`tag`**
+- [ ] **`pack-objects / unpack-objects`**
+- [ ] **`clone / fetch / push`**
 
 ---
 
-## 🌐 Phase 7: Advanced Git (Later)
-
-* [ ] **`tag`**
-* [ ] **`pack-objects / unpack-objects`**
-* [ ] **`clone / fetch / push`**
-
----
+## Project Structure
 
 ```
 src/
-  main.rs
-  cli/
-    mod.rs
-    init.rs
-    hash_object.rs
-    cat_file.rs
-  app/
-    mod.rs
-    init_repo.rs
-    hash_object.rs
-    read_object.rs
-    commit.rs
-  domain/
-    mod.rs
-    oid.rs
-    object/
-      mod.rs
-      blob.rs
-      tree.rs
-      commit.rs
-    refs.rs
-  infra/
-    mod.rs
-    repo_layout.rs
-    object_store_fs.rs
-    ref_store_fs.rs
-    index_store_fs.rs
+  main.rs          # All commands implemented here (single-file for now)
+
+tests/
+  common/mod.rs    # Shared test helpers
+  init_test.rs
+  hash_object_test.rs
+  cat_file_test.rs
+  write_tree_test.rs
+  ls_tree_test.rs
+  roundtrip_test.rs
+  error_test.rs
 ```
+
 ---
+
+## Usage
+
+```bash
+# Initialize a repository
+cargo run -- init
+
+# Hash a file (print OID only)
+cargo run -- hash-object <file>
+
+# Hash a file and write to object store
+cargo run -- -w hash-object <file>
+
+# Print object content
+cargo run -- cat-file -p <oid>
+
+# Snapshot working directory as a tree object
+cargo run -- write-tree
+
+# List entries of a tree object
+cargo run -- ls-tree <tree_oid>
+```
+
+## Running Tests
+
+```bash
+cargo test                      # run all tests
+cargo test --test ls_tree_test  # run a specific test file
+```

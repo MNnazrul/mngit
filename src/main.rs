@@ -250,6 +250,64 @@ fn write_tree() -> io::Result<String> {
     write_tree_at_path(Path::new("."))
 }
 
+fn ls_tree(oid: &str) -> io::Result<()> {
+    let raw = read_object(oid)?;
+
+    // Parse header: "tree {size}\0"
+    let null_pos = raw
+        .iter()
+        .position(|&b| b == 0)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid object format"))?;
+
+    let header = std::str::from_utf8(&raw[..null_pos])
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    if !header.starts_with("tree ") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Not a tree object: {}", header),
+        ));
+    }
+
+    // Parse entries after header
+    let mut pos = null_pos + 1;
+    while pos < raw.len() {
+        // Find space separating mode from name
+        let space_pos = raw[pos..]
+            .iter()
+            .position(|&b| b == b' ')
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid tree entry"))?
+            + pos;
+
+        let mode = std::str::from_utf8(&raw[pos..space_pos])
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+        // Find null byte separating name from OID
+        let name_null = raw[space_pos + 1..]
+            .iter()
+            .position(|&b| b == 0)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid tree entry"))?
+            + space_pos
+            + 1;
+
+        let name = std::str::from_utf8(&raw[space_pos + 1..name_null])
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+        // Next 20 bytes are the raw OID
+        let oid_bytes = &raw[name_null + 1..name_null + 21];
+        let oid_hex: String = oid_bytes.iter().map(|b| format!("{:02x}", b)).collect();
+
+        // Determine type from mode
+        let obj_type = if mode == "40000" { "tree" } else { "blob" };
+
+        println!("{:0>6} {} {}\t{}", mode, obj_type, oid_hex, name);
+
+        pos = name_null + 21;
+    }
+
+    Ok(())
+}
+
 fn hex_to_bytes(hex: &str) -> io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     for i in (0..hex.len()).step_by(2) {
@@ -341,9 +399,33 @@ fn main() {
             }
         }
 
+        "ls-tree" => {
+            let repo_dir = Path::new(".mngit");
+            if !repo_dir.exists() || !repo_dir.is_dir() {
+                eprintln!("Please first init the repository");
+                std::process::exit(1);
+            }
+
+            let oid = match args.oid.as_deref() {
+                Some(o) => o,
+                None => match args.file.as_deref() {
+                    Some(p) => p.to_str().unwrap_or(""),
+                    None => {
+                        eprintln!("Usage: ls-tree <oid>");
+                        std::process::exit(1);
+                    }
+                },
+            };
+
+            if let Err(e) = ls_tree(oid) {
+                eprintln!("ls-tree failed: {e}");
+                std::process::exit(1);
+            }
+        }
+
         other => {
             eprintln!("No a correct command : {other}");
-            eprintln!("Try: init | hash-object [-w] <file> | cat-file -p <oid> | write-tree");
+            eprintln!("Try: init | hash-object [-w] <file> | cat-file -p <oid> | write-tree | ls-tree <oid>");
             std::process::exit(1);
         }
     }
