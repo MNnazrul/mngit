@@ -15,6 +15,9 @@ struct Args {
     #[arg(short = 'p', long = "print", default_value_t = false)]
     print: bool,
 
+    #[arg(short = 'm', long = "message")]
+    message: Option<String>,
+
     file: Option<std::path::PathBuf>,
 
     oid: Option<String>,
@@ -112,10 +115,37 @@ fn main() {
             }
         }
 
+        "commit-tree" => {
+            require_repo();
+            let tree_oid = match args.file.as_deref() {
+                Some(p) => p.to_str().unwrap_or(""),
+                None => {
+                    eprintln!("Usage: commit-tree <tree_oid> -m \"message\"");
+                    std::process::exit(1);
+                }
+            };
+
+            let message = match args.message.as_deref() {
+                Some(m) => m,
+                None => {
+                    eprintln!("Usage: commit-tree <tree_oid> -m \"message\"");
+                    std::process::exit(1);
+                }
+            };
+
+            match commands::commit_tree::run(tree_oid, message, None) {
+                Ok(commit_oid) => println!("{commit_oid}"),
+                Err(e) => {
+                    eprintln!("commit-tree failed: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+
         other => {
             eprintln!("No a correct command : {other}");
             eprintln!(
-                "Try: init | hash-object [-w] <file> | cat-file -p <oid> | write-tree | ls-tree <oid>"
+                "Try: init | hash-object [-w] <file> | cat-file -p <oid> | write-tree | ls-tree <oid> | commit-tree <tree_oid> -m \"msg\""
             );
             std::process::exit(1);
         }

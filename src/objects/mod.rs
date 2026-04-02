@@ -1,4 +1,5 @@
 pub mod blob;
+pub mod commit;
 pub mod tree;
 
 use std::{fs, io, path::Path};

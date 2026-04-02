@@ -22,7 +22,7 @@ A Git implementation from scratch in Rust — for learning how Git works interna
 
 ### Phase 3: Commits & References
 
-- [ ] **`commit-tree <tree_oid> -m "message"`** — Tree → commit object
+- [x] **`commit-tree <tree_oid> -m "message"`** — Tree → commit object
 - [ ] **`update-ref` / `update-head`** — Update `refs/heads/main` or `HEAD`
 - [ ] **`rev-parse <ref>`** — Resolve `HEAD` or branch name to an OID
 - [ ] **`log`** — Traverse and display commit history
